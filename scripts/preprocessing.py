@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from sklearn.preprocessing import StandardScaler
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,8 @@ STEP5_REPORT_PATH = OUTPUT_DIR / "step5_outlier_removal_report.md"
 STEP5_CHECKPOINT_PATH = PROJECT_ROOT / "outputs" / "processed_data" / "titanic_outliers_removed.csv"
 STEP5_BEFORE_PLOT_PATH = IMAGES_DIR / "step5_boxplots_before_outlier_removal.png"
 STEP5_AFTER_PLOT_PATH = IMAGES_DIR / "step5_boxplots_after_outlier_removal.png"
+STEP6_REPORT_PATH = OUTPUT_DIR / "step6_feature_scaling_report.md"
+FINAL_DATASET_PATH = PROJECT_ROOT / "data" / "processed" / "cleaned_titanic.csv"
 
 
 def ensure_output_directory() -> None:
@@ -665,6 +668,95 @@ def build_outlier_removal_report(summary: Dict[str, object], cleaned_df: pd.Data
 	return "\n".join(lines)
 
 
+def select_scaling_columns(df: pd.DataFrame) -> List[str]:
+	"""Select numeric features that should be standardized for modeling."""
+
+	# Scale the meaningful non-binary numeric features; target, identifiers, and dummy columns stay unchanged.
+	return [column_name for column_name in ["Pclass", "Age", "SibSp", "Parch", "Fare"] if column_name in df.columns]
+
+
+def standardize_features(df: pd.DataFrame, columns: List[str]) -> Tuple[pd.DataFrame, Dict[str, object]]:
+	"""Apply StandardScaler to the selected columns and preserve the rest of the dataframe."""
+
+	working_df = df.copy()
+	before_stats = working_df[columns].agg(["mean", "std", "min", "max"]).transpose()
+	scaler = StandardScaler()
+	working_df[columns] = scaler.fit_transform(working_df[columns])
+	after_stats = working_df[columns].agg(["mean", "std", "min", "max"]).transpose()
+
+	summary = {
+		"columns_scaled": columns,
+		"before_shape": df.shape,
+		"after_shape": working_df.shape,
+		"before_stats": before_stats,
+		"after_stats": after_stats,
+		"scaler_name": "StandardScaler",
+	}
+
+	return working_df, summary
+
+
+def build_feature_scaling_report(summary: Dict[str, object], scaled_df: pd.DataFrame) -> str:
+	"""Create a markdown report for Step 6 feature scaling."""
+
+	columns_scaled = summary["columns_scaled"]
+	before_shape = summary["before_shape"]
+	after_shape = summary["after_shape"]
+	before_stats = summary["before_stats"]
+	after_stats = summary["after_stats"]
+	scaler_name = summary["scaler_name"]
+
+	lines = [
+		"# Titanic Feature Scaling Report - Step 6",
+		"",
+		"## Objective",
+		"Standardize the final numeric features so the dataset is ready for model training.",
+		"",
+		"## What Is Feature Scaling?",
+		"Feature scaling is the process of bringing numeric variables onto a comparable scale so that large-valued features do not dominate model learning.",
+		"",
+		"## Why It Matters",
+		"- Distance-based models become biased when features have different ranges.",
+		"- Gradient-based models converge more smoothly with scaled inputs.",
+		"- Regularized models are easier to interpret when features are on the same scale.",
+		"",
+		"## Normalization vs Standardization",
+		"- Normalization rescales values to a fixed range such as 0 to 1.",
+		"- Standardization converts values into z-scores with mean 0 and standard deviation 1.",
+		"- For Titanic, standardization is preferred because the numeric features have different spreads and include count-like and continuous variables.",
+		"",
+		"## Algorithms Affected By Feature Scale",
+		"- k-NN",
+		"- k-Means",
+		"- SVM",
+		"- PCA",
+		"- Logistic Regression and other gradient-based models",
+		"",
+		"## Columns Scaled",
+		", ".join(columns_scaled) if columns_scaled else "None",
+		"",
+		"## Before Scaling Summary",
+		"```text",
+		before_stats.to_string(),
+		"```",
+		"",
+		"## After Scaling Summary",
+		"```text",
+		after_stats.to_string(),
+		"```",
+		"",
+		"## Dataset Size",
+		f"- Shape before scaling: {before_shape[0]} rows and {before_shape[1]} columns",
+		f"- Shape after scaling: {after_shape[0]} rows and {after_shape[1]} columns",
+		"",
+		"## Output Snapshot",
+		f"- Remaining missing values: {int(scaled_df.isnull().sum().sum())}",
+		f"- Final processed dataset saved to: {FINAL_DATASET_PATH}",
+	]
+
+	return "\n".join(lines)
+
+
 def build_categorical_encoding_report(summary: Dict[str, object], encoded_df: pd.DataFrame) -> str:
 	"""Create a markdown report for Step 3 categorical handling and encoding."""
 
@@ -736,7 +828,7 @@ def build_categorical_encoding_report(summary: Dict[str, object], encoded_df: pd
 
 
 def main() -> None:
-	"""Run Step 1 through Step 4 of the Titanic preprocessing pipeline."""
+	"""Run Step 1 through Step 6 of the Titanic preprocessing pipeline."""
 
 	ensure_output_directory()
 
@@ -840,6 +932,24 @@ def main() -> None:
 		print(plot_path)
 	print(f"\nStep 5 checkpoint saved to: {STEP5_CHECKPOINT_PATH}")
 	print(f"Step 5 report saved to: {STEP5_REPORT_PATH}")
+
+	scaling_columns = select_scaling_columns(filtered_df)
+	scaled_df, scaling_summary = standardize_features(filtered_df, scaling_columns)
+	FINAL_DATASET_PATH.parent.mkdir(parents=True, exist_ok=True)
+	scaled_df.to_csv(FINAL_DATASET_PATH, index=False)
+
+	step6_report = build_feature_scaling_report(scaling_summary, scaled_df)
+	STEP6_REPORT_PATH.write_text(step6_report, encoding="utf-8")
+
+	print("\nStep 6: Feature Scaling")
+	print("Scaling Columns:")
+	print(scaling_columns)
+	print("\nBefore Scaling Summary:")
+	print(scaling_summary["before_stats"])
+	print("\nAfter Scaling Summary:")
+	print(scaling_summary["after_stats"])
+	print(f"\nFinal processed dataset saved to: {FINAL_DATASET_PATH}")
+	print(f"Step 6 report saved to: {STEP6_REPORT_PATH}")
 
 
 if __name__ == "__main__":
