@@ -11,7 +11,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +24,8 @@ STEP2_REPORT_PATH = OUTPUT_DIR / "step2_missing_value_handling_report.md"
 STEP2_CHECKPOINT_PATH = PROJECT_ROOT / "outputs" / "processed_data" / "titanic_missing_handled.csv"
 STEP3_REPORT_PATH = OUTPUT_DIR / "step3_categorical_encoding_report.md"
 STEP3_CHECKPOINT_PATH = PROJECT_ROOT / "outputs" / "processed_data" / "titanic_categorical_encoded.csv"
+STEP4_REPORT_PATH = OUTPUT_DIR / "step4_outlier_detection_report.md"
+IMAGES_DIR = PROJECT_ROOT / "images" / "plots"
 
 
 def ensure_output_directory() -> None:
@@ -329,6 +333,152 @@ def handle_categorical_features(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[st
 	return working_df, summary
 
 
+def get_outlier_analysis_columns(df: pd.DataFrame) -> List[str]:
+	"""Select numeric columns suitable for outlier analysis."""
+
+	excluded_columns = {"PassengerId", "Survived"}
+	analysis_columns = []
+
+	for column_name in df.select_dtypes(include=["number"]).columns:
+		if column_name in excluded_columns:
+			continue
+		if df[column_name].nunique(dropna=False) <= 2:
+			continue
+		analysis_columns.append(column_name)
+
+	return analysis_columns
+
+
+def detect_outliers_iqr(df: pd.DataFrame, columns: List[str]) -> Dict[str, Dict[str, float]]:
+	"""Detect outliers in the selected columns using the IQR method."""
+
+	outlier_summary: Dict[str, Dict[str, float]] = {}
+
+	for column_name in columns:
+		series = df[column_name]
+		q1 = series.quantile(0.25)
+		q3 = series.quantile(0.75)
+		iqr = q3 - q1
+		lower_bound = q1 - 1.5 * iqr
+		upper_bound = q3 + 1.5 * iqr
+		outlier_mask = (series < lower_bound) | (series > upper_bound)
+		outlier_count = int(outlier_mask.sum())
+		outlier_percentage = round((outlier_count / len(series)) * 100, 2)
+
+		outlier_summary[column_name] = {
+			"q1": float(q1),
+			"q3": float(q3),
+			"iqr": float(iqr),
+			"lower_bound": float(lower_bound),
+			"upper_bound": float(upper_bound),
+			"outlier_count": outlier_count,
+			"outlier_percentage": outlier_percentage,
+		}
+
+	return outlier_summary
+
+
+def create_boxplots(df: pd.DataFrame, columns: List[str]) -> List[Path]:
+	"""Create and save boxplots for the selected numeric columns."""
+
+	IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+	saved_plots: List[Path] = []
+
+	if not columns:
+		return saved_plots
+
+	fig, axes = plt.subplots(len(columns), 1, figsize=(10, 4 * len(columns)))
+	if len(columns) == 1:
+		axes = [axes]
+
+	for axis, column_name in zip(axes, columns):
+		sns.boxplot(x=df[column_name], ax=axis, color="#4c72b0")
+		axis.set_title(f"Boxplot of {column_name}")
+		axis.set_xlabel(column_name)
+
+	combined_plot_path = IMAGES_DIR / "step4_boxplots_numerical_features.png"
+	fig.tight_layout()
+	fig.savefig(combined_plot_path, dpi=300, bbox_inches="tight")
+	plt.close(fig)
+	saved_plots.append(combined_plot_path)
+
+	return saved_plots
+
+
+def build_outlier_report(df: pd.DataFrame, analysis_columns: List[str], outlier_summary: Dict[str, Dict[str, float]], plot_paths: List[Path]) -> str:
+	"""Create a markdown report for Step 4 outlier detection."""
+
+	selected_summary = df[analysis_columns].describe().transpose() if analysis_columns else pd.DataFrame()
+	selected_summary_table = selected_summary.to_string() if not selected_summary.empty else "No numeric columns selected for outlier analysis."
+
+	lines = [
+		"# Titanic Outlier Detection Report - Step 4",
+		"",
+		"## Objective",
+		"Identify potential outliers in the Titanic dataset using the IQR method and visualize them with boxplots, without removing any rows yet.",
+		"",
+		"## What Is An Outlier?",
+		"An outlier is a value that lies far away from the typical range of the data. In machine learning, outliers can distort averages, affect model training, and mislead interpretation.",
+		"",
+		"## Why Outliers Matter",
+		"- They can skew summary statistics.",
+		"- They can influence distance-based and regression-based models.",
+		"- They may represent data errors or genuine rare cases.",
+		"",
+		"## When To Remove Or Keep Outliers",
+		"- Remove outliers when they are clearly data-entry errors or impossible values.",
+		"- Keep outliers when they are valid rare observations that carry business or survival meaning.",
+		"- For Titanic, detection should come before removal because the dataset contains real rare values such as high Fare.",
+		"",
+		"## Numerical Features Considered For Outlier Analysis",
+		", ".join(analysis_columns) if analysis_columns else "None",
+		"",
+		"## Statistical Summary Before Removal",
+		"```text",
+		selected_summary_table,
+		"```",
+		"",
+		"## IQR Rule",
+		"Lower Bound = Q1 - 1.5 × IQR",
+		"Upper Bound = Q3 + 1.5 × IQR",
+		"Values outside these bounds are flagged as outliers.",
+		"",
+		"## Outlier Detection Summary",
+	]
+
+	for column_name, details in outlier_summary.items():
+		lines.extend([
+			f"### {column_name}",
+			f"- Q1: {details['q1']}",
+			f"- Q3: {details['q3']}",
+			f"- IQR: {details['iqr']}",
+			f"- Lower bound: {details['lower_bound']}",
+			f"- Upper bound: {details['upper_bound']}",
+			f"- Outlier count: {details['outlier_count']}",
+			f"- Outlier percentage: {details['outlier_percentage']}%",
+			"",
+		])
+
+	lines.extend([
+		"## Saved Plots",
+	])
+
+	for plot_path in plot_paths:
+		lines.append(f"- {plot_path}")
+
+	lines.extend([
+		"",
+		"## Interpretation",
+		"The Titanic dataset is better suited to IQR-based detection because some numerical features are skewed and contain real extreme values. IQR is robust against skewness, while Z-score assumes a more normal distribution.",
+		"",
+		"## Output Snapshot",
+		f"- Rows analyzed: {df.shape[0]}",
+		f"- Columns analyzed: {len(analysis_columns)}",
+	])
+
+	return "\n".join(lines)
+
+
 def build_categorical_encoding_report(summary: Dict[str, object], encoded_df: pd.DataFrame) -> str:
 	"""Create a markdown report for Step 3 categorical handling and encoding."""
 
@@ -400,7 +550,7 @@ def build_categorical_encoding_report(summary: Dict[str, object], encoded_df: pd
 
 
 def main() -> None:
-	"""Run Step 1, Step 2, and Step 3 of the Titanic preprocessing pipeline."""
+	"""Run Step 1 through Step 4 of the Titanic preprocessing pipeline."""
 
 	ensure_output_directory()
 
@@ -459,6 +609,27 @@ def main() -> None:
 	print(categorical_summary["new_columns"])
 	print(f"\nStep 3 checkpoint saved to: {STEP3_CHECKPOINT_PATH}")
 	print(f"Step 3 report saved to: {STEP3_REPORT_PATH}")
+
+	analysis_columns = get_outlier_analysis_columns(encoded_df)
+	plot_paths = create_boxplots(encoded_df, analysis_columns)
+	outlier_summary = detect_outliers_iqr(encoded_df, analysis_columns)
+	step4_report = build_outlier_report(encoded_df, analysis_columns, outlier_summary, plot_paths)
+	STEP4_REPORT_PATH.write_text(step4_report, encoding="utf-8")
+
+	print("\nStep 4: Outlier Detection & Visualization")
+	print("Outlier Analysis Columns:")
+	print(analysis_columns)
+	print("\nOutlier Summary:")
+	for column_name, details in outlier_summary.items():
+		print(
+			f"{column_name}: outliers={details['outlier_count']}, "
+			f"percentage={details['outlier_percentage']}%, "
+			f"bounds=({details['lower_bound']}, {details['upper_bound']})"
+		)
+	print("\nSaved Plots:")
+	for plot_path in plot_paths:
+		print(plot_path)
+	print(f"\nStep 4 report saved to: {STEP4_REPORT_PATH}")
 
 
 if __name__ == "__main__":
