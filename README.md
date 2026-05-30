@@ -1,24 +1,49 @@
 # Titanic Data Cleaning & Preprocessing
 
-Script-based AI & ML internship project for cleaning and preprocessing the Titanic dataset with Python, Pandas, NumPy, Matplotlib, Seaborn, and Scikit-Learn.
+Script-based Titanic preprocessing project for an AI/ML internship submission. The pipeline cleans missing values, engineers categorical features, detects and removes outliers, standardizes numerical features, and saves a final ML-ready dataset.
 
-## Repository Structure
+## Project Summary
+
+This project transforms the raw Titanic passenger dataset into a clean, model-ready dataset using a reproducible Python script workflow. It demonstrates practical data cleaning decisions, feature engineering, IQR-based outlier handling, and feature scaling with professional GitHub presentation.
+
+## Objective
+
+Prepare the Titanic dataset for machine learning by applying a structured preprocessing pipeline that preserves useful signal, removes noise, and produces a final cleaned dataset for downstream modeling.
+
+## Dataset Information
+
+- Source: Titanic passenger dataset
+- Original size: 891 rows, 12 columns
+- Final size after preprocessing: 721 rows, 14 columns
+- Target variable: Survived
+- Raw data location: data/raw/Titanic-Dataset.csv
+- Final output location: data/processed/cleaned_titanic.csv
+
+## Technologies Used
+
+- Python 3.x
+- pandas
+- NumPy
+- Matplotlib
+- Seaborn
+- scikit-learn
+
+## Project Structure
 
 ```text
 Titanic-Data-Cleaning-Preprocessing/
-│
 ├── data/
 │   ├── raw/
 │   │   └── Titanic-Dataset.csv
 │   └── processed/
-│
+│       └── cleaned_titanic.csv
+├── images/
+│   └── plots/
+├── outputs/
+│   ├── processed_data/
+│   └── reports/
 ├── scripts/
 │   └── preprocessing.py
-│
-├── images/
-│
-├── outputs/
-│
 ├── README.md
 ├── requirements.txt
 └── .gitignore
@@ -28,114 +53,89 @@ Titanic-Data-Cleaning-Preprocessing/
 
 | Path | Purpose |
 |---|---|
-| data/raw/ | Stores the original untouched Titanic dataset. |
-| data/processed/ | Stores the cleaned and transformed dataset after preprocessing. |
-| scripts/ | Contains the main preprocessing pipeline in a reusable Python script. |
-| scripts/preprocessing.py | Main workflow entry point for loading, exploring, cleaning, encoding, scaling, and saving data. |
-| images/ | Stores screenshots, plots, and visual summaries for GitHub presentation. |
-| outputs/ | Stores final reports and exported results from the preprocessing workflow. |
-| README.md | Explains the project, workflow, structure, and usage for reviewers. |
-| requirements.txt | Lists the Python packages required to run the project. |
-| .gitignore | Prevents temporary files, caches, and local environments from being committed. |
+| data/raw/ | Stores the untouched source dataset. |
+| data/processed/ | Stores the final cleaned dataset used for modeling. |
+| images/plots/ | Stores saved visualizations for GitHub and documentation. |
+| outputs/processed_data/ | Stores intermediate processed checkpoints from each pipeline stage. |
+| outputs/reports/ | Stores Markdown reports generated during each preprocessing step. |
+| scripts/preprocessing.py | Main script that runs the full preprocessing workflow end to end. |
+| README.md | Explains the project for reviewers, recruiters, and GitHub visitors. |
+| requirements.txt | Lists the Python dependencies required to run the project. |
+| .gitignore | Excludes local, temporary, and machine-specific files from version control. |
 
-## Professional Naming Conventions
+## Data Preprocessing Workflow
 
-- Use lowercase with hyphens for the repository name: `Titanic-Data-Cleaning-Preprocessing`.
-- Use lowercase with underscores for Python scripts: `preprocessing.py`.
-- Use descriptive dataset filenames such as `titanic_cleaned.csv`.
-- Use clear report filenames such as `titanic_preprocessing_report.md` or `titanic_preprocessing_report.pdf`.
-- Use numbered prefixes only if multiple scripts are introduced later, such as `01_preprocessing.py`.
+1. Dataset Loading and Exploration
+2. Missing Value Handling
+3. Categorical Feature Encoding
+4. Outlier Detection
+5. Outlier Removal
+6. Feature Scaling
+7. Save Final Dataset
 
-## Script Workflow Roadmap
+### Workflow Notes
 
-The project should be organized inside `preprocessing.py` in this order:
+- Dataset Loading and Exploration: inspect shape, columns, dtypes, summary statistics, and missing values.
+- Missing Value Handling: fill Age with median, fill Embarked with mode, and drop Cabin.
+- Categorical Feature Encoding: engineer Title from Name, label encode Sex, one-hot encode Embarked and Title, and drop Name and Ticket.
+- Outlier Detection: visualize numeric features with boxplots and detect outliers using the IQR method.
+- Outlier Removal: remove rows outside IQR bounds for Age and Fare only.
+- Feature Scaling: standardize Pclass, Age, SibSp, Parch, and Fare using StandardScaler.
+- Save Final Dataset: export the final dataset to data/processed/cleaned_titanic.csv.
 
-1. Import Libraries
-2. Load Dataset
-3. Dataset Exploration
-4. Missing Value Handling
-5. Encoding
-6. Outlier Detection
-7. Outlier Removal
-8. Feature Scaling
-9. Save Cleaned Dataset
-10. Generate Outputs
+## Results
 
-## Suggested Script Sections
+- Missing values were resolved in Age and Embarked.
+- Cabin was removed due to extremely high missingness.
+- Title was engineered from Name to preserve useful social information.
+- Outliers were detected and removed using the IQR method on Age and Fare.
+- Numeric features were standardized for modeling.
+- The final dataset is ready for ML training and experimentation.
 
-### 1. Import Libraries
-Purpose: Load pandas, NumPy, Matplotlib, Seaborn, and Scikit-Learn utilities.
-
-### 2. Load Dataset
-Purpose: Read the raw Titanic CSV from `data/raw/` into a dataframe.
-
-### 3. Dataset Exploration
-Purpose: Inspect head, shape, columns, data types, summary statistics, and missing values.
-
-### 4. Missing Value Handling
-Purpose: Decide how to treat null values based on feature meaning and missing-value percentage.
-
-### 5. Encoding
-Purpose: Convert categorical variables into numeric format for machine learning use.
-
-### 6. Outlier Detection
-Purpose: Identify extreme values using plots or statistical checks.
-
-### 7. Outlier Removal
-Purpose: Remove, cap, or transform outliers when justified.
-
-### 8. Feature Scaling
-Purpose: Standardize or normalize numeric features where required.
-
-### 9. Save Cleaned Dataset
-Purpose: Export the final cleaned data to `data/processed/`.
-
-### 10. Generate Outputs
-Purpose: Save plots, comparisons, and reports to `images/` and `outputs/`.
-
-## What To Save In Each Folder
-
-### images/
-- Missing-value visualizations
-- Distribution plots
-- Boxplots before and after outlier handling
-- Correlation heatmaps
-- Category count plots
-
-### outputs/
-- Final preprocessing report
-- Summary tables
-- Before-and-after comparison files
-- Validation notes and exported results
-
-### data/processed/
-- Final cleaned dataset ready for modeling
-
-## Why A Script-Based Workflow Is Better For Real Projects
-
-- It is easier to reproduce consistently from start to finish.
-- It is simpler to review in GitHub because the logic is in one linear file.
-- It fits production-style workflows better than notebook cells.
-- It is easier to automate, test, and schedule later.
-- It avoids hidden notebook state issues and accidental out-of-order execution.
-
-## README Structure Recruiters Like
-
-1. Project title and summary
-2. Objective
-3. Dataset description
-4. Repository structure
-5. Workflow overview
-6. Key preprocessing decisions
-7. Key outputs and visuals
-8. How to run the script
-9. Final cleaned dataset
-10. Lessons learned and next steps
-
-## How To Run The Current Pipeline
+## How To Run The Project
 
 ```bash
 python scripts/preprocessing.py
 ```
 
-Current status: Step 1 dataset loading and exploration is implemented, and the report is saved to `outputs/reports/step1_dataset_exploration_report.md`.
+Recommended setup:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python scripts/preprocessing.py
+```
+
+## Output Files
+
+### Final Dataset
+- data/processed/cleaned_titanic.csv
+
+### Intermediate Processed Data
+- outputs/processed_data/titanic_missing_handled.csv
+- outputs/processed_data/titanic_categorical_encoded.csv
+- outputs/processed_data/titanic_outliers_removed.csv
+
+### Reports
+- outputs/reports/step1_dataset_exploration_report.md
+- outputs/reports/step2_missing_value_handling_report.md
+- outputs/reports/step3_categorical_encoding_report.md
+- outputs/reports/step4_outlier_detection_report.md
+- outputs/reports/step5_outlier_removal_report.md
+- outputs/reports/step6_feature_scaling_report.md
+
+### Visualizations
+- images/plots/step4_boxplots_numerical_features.png
+- images/plots/step5_boxplots_before_outlier_removal.png
+- images/plots/step5_boxplots_after_outlier_removal.png
+
+## Author Information
+
+- Author: Aryan
+- Project Type: AI/ML Internship Submission
+- Repository Focus: Data Cleaning, Preprocessing, and GitHub Presentation
+
+## Repository Description
+
+Titanic data preprocessing pipeline in Python that converts raw passenger data into a clean, scaled dataset for machine learning.
