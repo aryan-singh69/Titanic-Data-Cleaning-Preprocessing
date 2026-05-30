@@ -3,6 +3,7 @@
 Current scope:
 - Step 1: Dataset loading and exploration
 - Step 2: Missing value handling
+- Step 3: Categorical feature handling and encoding
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ OUTPUT_DIR = PROJECT_ROOT / "outputs" / "reports"
 REPORT_PATH = OUTPUT_DIR / "step1_dataset_exploration_report.md"
 STEP2_REPORT_PATH = OUTPUT_DIR / "step2_missing_value_handling_report.md"
 STEP2_CHECKPOINT_PATH = PROJECT_ROOT / "outputs" / "processed_data" / "titanic_missing_handled.csv"
+STEP3_REPORT_PATH = OUTPUT_DIR / "step3_categorical_encoding_report.md"
+STEP3_CHECKPOINT_PATH = PROJECT_ROOT / "outputs" / "processed_data" / "titanic_categorical_encoded.csv"
 
 
 def ensure_output_directory() -> None:
@@ -239,8 +242,165 @@ def build_missing_value_report(summary: Dict[str, object], cleaned_df: pd.DataFr
 	return "\n".join(lines)
 
 
+def analyze_categorical_columns(df: pd.DataFrame) -> Dict[str, Dict[str, str]]:
+	"""Decide how each categorical column should be handled."""
+
+	return {
+		"Name": {
+			"information": "Passenger name, often containing honorifics such as Mr, Mrs, Miss, and Master.",
+			"decision": "Feature engineer Title and drop Name",
+			"reason": "Raw names are high-cardinality text, but titles can capture useful social information.",
+		},
+		"Sex": {
+			"information": "Binary gender category.",
+			"decision": "Label encode to 0/1",
+			"reason": "Sex has only two values and works well as a binary numeric feature.",
+		},
+		"Ticket": {
+			"information": "Ticket identifier with mixed alphanumeric patterns.",
+			"decision": "Drop column",
+			"reason": "Ticket has very high cardinality and behaves more like an identifier than a stable predictor.",
+		},
+		"Embarked": {
+			"information": "Port of embarkation, a nominal categorical feature.",
+			"decision": "One-hot encode",
+			"reason": "Embarked has only a few categories and no natural order.",
+		},
+	}
+
+
+def handle_categorical_features(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, object]]:
+	"""Apply categorical feature selection, engineering, and encoding."""
+
+	working_df = df.copy()
+	strategy_map = analyze_categorical_columns(working_df)
+	before_shape = working_df.shape
+	before_columns = working_df.columns.tolist()
+	before_cardinality = {
+		column_name: working_df[column_name].nunique(dropna=False)
+		for column_name in ["Name", "Sex", "Ticket", "Embarked"]
+		if column_name in working_df.columns
+	}
+
+	working_df["Title"] = working_df["Name"].str.extract(r",\s*([^\.]+)\.", expand=False)
+	working_df["Title"] = working_df["Title"].fillna("Rare").str.strip()
+	working_df["Title"] = working_df["Title"].replace(
+		{
+			"Mlle": "Miss",
+			"Ms": "Miss",
+			"Mme": "Mrs",
+			"Lady": "Rare",
+			"Countess": "Rare",
+			"the Countess": "Rare",
+			"Capt": "Rare",
+			"Col": "Rare",
+			"Don": "Rare",
+			"Dr": "Rare",
+			"Major": "Rare",
+			"Rev": "Rare",
+			"Sir": "Rare",
+			"Jonkheer": "Rare",
+			"Dona": "Rare",
+		}
+	)
+
+	working_df["Sex"] = working_df["Sex"].map({"male": 0, "female": 1}).astype("int64")
+	working_df = working_df.drop(columns=["Name", "Ticket"])
+	working_df = pd.get_dummies(working_df, columns=["Embarked", "Title"], drop_first=True, dtype=int)
+
+	after_shape = working_df.shape
+	after_columns = working_df.columns.tolist()
+	new_columns = [column_name for column_name in after_columns if column_name not in before_columns]
+	removed_columns = [column_name for column_name in before_columns if column_name not in after_columns]
+	encoded_columns = [column_name for column_name in after_columns if column_name.startswith("Embarked_") or column_name.startswith("Title_")]
+
+	summary = {
+		"before_shape": before_shape,
+		"after_shape": after_shape,
+		"before_columns": before_columns,
+		"after_columns": after_columns,
+		"before_cardinality": before_cardinality,
+		"strategies": strategy_map,
+		"new_columns": new_columns,
+		"removed_columns": removed_columns,
+		"encoded_columns": encoded_columns,
+	}
+
+	return working_df, summary
+
+
+def build_categorical_encoding_report(summary: Dict[str, object], encoded_df: pd.DataFrame) -> str:
+	"""Create a markdown report for Step 3 categorical handling and encoding."""
+
+	strategies = summary["strategies"]
+	before_shape = summary["before_shape"]
+	after_shape = summary["after_shape"]
+	before_columns = summary["before_columns"]
+	after_columns = summary["after_columns"]
+	before_cardinality = summary["before_cardinality"]
+	new_columns = summary["new_columns"]
+	removed_columns = summary["removed_columns"]
+	encoded_columns = summary["encoded_columns"]
+
+	lines = [
+		"# Titanic Categorical Feature Handling & Encoding Report - Step 3",
+		"",
+		"## Objective",
+		"Convert categorical information into model-ready numeric features while removing noisy identifier-like columns.",
+		"",
+		"## Theory Summary",
+		"- Categorical data stores labels or groups instead of continuous numeric measurements.",
+		"- Machine learning models require numeric input because they perform mathematical operations on features.",
+		"- Label encoding converts categories into integers and is useful for binary variables.",
+		"- One-hot encoding creates separate binary columns for each category and is preferred for nominal variables without order.",
+		"",
+		"## Column-Wise Decisions",
+	]
+
+	for column_name, details in strategies.items():
+		lines.extend([
+			f"### {column_name}",
+			f"- Information: {details['information']}",
+			f"- Decision: {details['decision']}",
+			f"- Reason: {details['reason']}",
+			f"- Unique values before encoding: {before_cardinality.get(column_name, 'N/A')}",
+			"",
+		])
+
+	lines.extend([
+		"## Before Encoding",
+		f"- Shape: {before_shape[0]} rows and {before_shape[1]} columns",
+		"- Columns:",
+		"```text",
+		", ".join(before_columns),
+		"```",
+		"",
+		"## After Encoding",
+		f"- Shape: {after_shape[0]} rows and {after_shape[1]} columns",
+		"- Columns:",
+		"```text",
+		", ".join(after_columns),
+		"```",
+		"",
+		"## Added Columns",
+		", ".join(new_columns) if new_columns else "None",
+		"",
+		"## Removed Columns",
+		", ".join(removed_columns) if removed_columns else "None",
+		"",
+		"## Encoded Columns",
+		", ".join(encoded_columns) if encoded_columns else "None",
+		"",
+		"## Output Snapshot",
+		f"- Final missing values: {int(encoded_df.isnull().sum().sum())}",
+		f"- Dataframe ready for later steps: {encoded_df.shape[0]} rows and {encoded_df.shape[1]} columns",
+	])
+
+	return "\n".join(lines)
+
+
 def main() -> None:
-	"""Run Step 1 and Step 2 of the Titanic preprocessing pipeline."""
+	"""Run Step 1, Step 2, and Step 3 of the Titanic preprocessing pipeline."""
 
 	ensure_output_directory()
 
@@ -282,6 +442,23 @@ def main() -> None:
 	print(missing_summary["after_missing"])
 	print(f"\nStep 2 checkpoint saved to: {STEP2_CHECKPOINT_PATH}")
 	print(f"Step 2 report saved to: {STEP2_REPORT_PATH}")
+
+	encoded_df, categorical_summary = handle_categorical_features(cleaned_df)
+	STEP3_CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+	encoded_df.to_csv(STEP3_CHECKPOINT_PATH, index=False)
+
+	step3_report = build_categorical_encoding_report(categorical_summary, encoded_df)
+	STEP3_REPORT_PATH.write_text(step3_report, encoding="utf-8")
+
+	print("\nStep 3: Categorical Feature Handling & Encoding")
+	print(f"Before Encoding Shape: {categorical_summary['before_shape']}")
+	print(f"After Encoding Shape: {categorical_summary['after_shape']}")
+	print("\nRemoved Columns:")
+	print(categorical_summary["removed_columns"])
+	print("\nAdded Columns:")
+	print(categorical_summary["new_columns"])
+	print(f"\nStep 3 checkpoint saved to: {STEP3_CHECKPOINT_PATH}")
+	print(f"Step 3 report saved to: {STEP3_REPORT_PATH}")
 
 
 if __name__ == "__main__":
