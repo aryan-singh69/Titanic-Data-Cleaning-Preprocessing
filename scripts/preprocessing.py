@@ -26,6 +26,10 @@ STEP3_REPORT_PATH = OUTPUT_DIR / "step3_categorical_encoding_report.md"
 STEP3_CHECKPOINT_PATH = PROJECT_ROOT / "outputs" / "processed_data" / "titanic_categorical_encoded.csv"
 STEP4_REPORT_PATH = OUTPUT_DIR / "step4_outlier_detection_report.md"
 IMAGES_DIR = PROJECT_ROOT / "images" / "plots"
+STEP5_REPORT_PATH = OUTPUT_DIR / "step5_outlier_removal_report.md"
+STEP5_CHECKPOINT_PATH = PROJECT_ROOT / "outputs" / "processed_data" / "titanic_outliers_removed.csv"
+STEP5_BEFORE_PLOT_PATH = IMAGES_DIR / "step5_boxplots_before_outlier_removal.png"
+STEP5_AFTER_PLOT_PATH = IMAGES_DIR / "step5_boxplots_after_outlier_removal.png"
 
 
 def ensure_output_directory() -> None:
@@ -479,6 +483,188 @@ def build_outlier_report(df: pd.DataFrame, analysis_columns: List[str], outlier_
 	return "\n".join(lines)
 
 
+def select_outlier_removal_columns(df: pd.DataFrame) -> List[str]:
+	"""Select the continuous numerical features to use for IQR-based row removal."""
+
+	# Age and Fare are continuous and informative; count-like columns are kept for later judgment.
+	return [column_name for column_name in ["Age", "Fare"] if column_name in df.columns]
+
+
+def compute_iqr_bounds(df: pd.DataFrame, columns: List[str]) -> Dict[str, Dict[str, float]]:
+	"""Compute Q1, Q3, IQR, and the lower and upper bounds for each selected column."""
+
+	bounds: Dict[str, Dict[str, float]] = {}
+
+	for column_name in columns:
+		q1 = df[column_name].quantile(0.25)
+		q3 = df[column_name].quantile(0.75)
+		iqr = q3 - q1
+		lower_bound = q1 - 1.5 * iqr
+		upper_bound = q3 + 1.5 * iqr
+		bounds[column_name] = {
+			"q1": float(q1),
+			"q3": float(q3),
+			"iqr": float(iqr),
+			"lower_bound": float(lower_bound),
+			"upper_bound": float(upper_bound),
+		}
+
+	return bounds
+
+
+def remove_outliers_iqr(df: pd.DataFrame, columns: List[str]) -> Tuple[pd.DataFrame, Dict[str, object]]:
+	"""Remove rows that fall outside IQR bounds for the selected columns."""
+
+	working_df = df.copy()
+	before_shape = working_df.shape
+	bounds = compute_iqr_bounds(working_df, columns)
+	feature_outlier_counts: Dict[str, int] = {}
+	combined_mask = pd.Series(True, index=working_df.index)
+
+	for column_name, bound_details in bounds.items():
+		column_mask = working_df[column_name].between(bound_details["lower_bound"], bound_details["upper_bound"])
+		feature_outlier_counts[column_name] = int((~column_mask).sum())
+		combined_mask &= column_mask
+
+	removed_df = working_df.loc[combined_mask].copy()
+	after_shape = removed_df.shape
+	rows_removed = before_shape[0] - after_shape[0]
+	percentage_removed = round((rows_removed / before_shape[0]) * 100, 2)
+
+	summary = {
+		"before_shape": before_shape,
+		"after_shape": after_shape,
+		"rows_removed": rows_removed,
+		"percentage_removed": percentage_removed,
+		"feature_outlier_counts": feature_outlier_counts,
+		"bounds": bounds,
+		"columns_used_for_removal": columns,
+	}
+
+	return removed_df, summary
+
+
+def create_outlier_removal_plots(before_df: pd.DataFrame, after_df: pd.DataFrame, columns: List[str]) -> List[Path]:
+	"""Save boxplots before and after outlier removal."""
+
+	IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+	saved_paths: List[Path] = []
+
+	if not columns:
+		return saved_paths
+
+	fig_before, axes_before = plt.subplots(len(columns), 1, figsize=(10, 4 * len(columns)))
+	if len(columns) == 1:
+		axes_before = [axes_before]
+
+	for axis, column_name in zip(axes_before, columns):
+		sns.boxplot(x=before_df[column_name], ax=axis, color="#c44e52")
+		axis.set_title(f"Before Outlier Removal - {column_name}")
+		axis.set_xlabel(column_name)
+
+	fig_before.tight_layout()
+	fig_before.savefig(STEP5_BEFORE_PLOT_PATH, dpi=300, bbox_inches="tight")
+	plt.close(fig_before)
+	saved_paths.append(STEP5_BEFORE_PLOT_PATH)
+
+	fig_after, axes_after = plt.subplots(len(columns), 1, figsize=(10, 4 * len(columns)))
+	if len(columns) == 1:
+		axes_after = [axes_after]
+
+	for axis, column_name in zip(axes_after, columns):
+		sns.boxplot(x=after_df[column_name], ax=axis, color="#4c72b0")
+		axis.set_title(f"After Outlier Removal - {column_name}")
+		axis.set_xlabel(column_name)
+
+	fig_after.tight_layout()
+	fig_after.savefig(STEP5_AFTER_PLOT_PATH, dpi=300, bbox_inches="tight")
+	plt.close(fig_after)
+	saved_paths.append(STEP5_AFTER_PLOT_PATH)
+
+	return saved_paths
+
+
+def build_outlier_removal_report(summary: Dict[str, object], cleaned_df: pd.DataFrame, plot_paths: List[Path]) -> str:
+	"""Create a markdown report for Step 5 outlier removal."""
+
+	before_shape = summary["before_shape"]
+	after_shape = summary["after_shape"]
+	rows_removed = summary["rows_removed"]
+	percentage_removed = summary["percentage_removed"]
+	feature_outlier_counts = summary["feature_outlier_counts"]
+	bounds = summary["bounds"]
+	columns_used = summary["columns_used_for_removal"]
+
+	lines = [
+		"# Titanic Outlier Removal Report - Step 5",
+		"",
+		"## Objective",
+		"Remove rows outside the IQR bounds for the selected continuous features while keeping the dataset ready for scaling later.",
+		"",
+		"## Why Outlier Removal Matters",
+		"- Extreme values can distort averages and spread.",
+		"- They can influence models sensitive to distance and variance.",
+		"- Removing them can improve stability when they are not meaningful rare cases.",
+		"",
+		"## When Not To Remove Outliers",
+		"- Keep valid rare observations if they carry domain meaning.",
+		"- Do not remove too many rows because the dataset can lose signal.",
+		"- In Titanic, count-like features such as Parch were not used for removal because they are highly zero-inflated and would cause excessive data loss.",
+		"",
+		"## IQR Formula",
+		"- Q1 = 25th percentile",
+		"- Q3 = 75th percentile",
+		"- IQR = Q3 - Q1",
+		"- Lower Bound = Q1 - 1.5 × IQR",
+		"- Upper Bound = Q3 + 1.5 × IQR",
+		"",
+		"## Columns Used For Removal",
+		", ".join(columns_used) if columns_used else "None",
+		"",
+		"## IQR Bounds And Feature-Wise Outlier Counts",
+	]
+
+	for column_name, bound_details in bounds.items():
+		lines.extend([
+			f"### {column_name}",
+			f"- Q1: {bound_details['q1']}",
+			f"- Q3: {bound_details['q3']}",
+			f"- IQR: {bound_details['iqr']}",
+			f"- Lower bound: {bound_details['lower_bound']}",
+			f"- Upper bound: {bound_details['upper_bound']}",
+			f"- Outliers detected in this feature: {feature_outlier_counts[column_name]}",
+			"",
+		])
+
+	lines.extend([
+		"## Dataset Size Comparison",
+		f"- Dataset size before removal: {before_shape[0]} rows and {before_shape[1]} columns",
+		f"- Dataset size after removal: {after_shape[0]} rows and {after_shape[1]} columns",
+		f"- Number of rows removed: {rows_removed}",
+		f"- Percentage removed: {percentage_removed}%",
+		"",
+		"## Summary Before Removal",
+		"The pre-removal boxplots still show wider whiskers and stronger upper tails. Age and Fare were the best candidates for filtering because they are continuous and informative.",
+		"",
+		"## Summary After Removal",
+		"The filtered dataset is tighter, with fewer extreme tails in the selected features. This is a cleaner input for the next scaling step.",
+		"",
+		"## Saved Plots",
+	])
+
+	for plot_path in plot_paths:
+		lines.append(f"- {plot_path}")
+
+	lines.extend([
+		"",
+		"## Output Snapshot",
+		f"- Rows remaining: {cleaned_df.shape[0]}",
+		f"- Remaining missing values: {int(cleaned_df.isnull().sum().sum())}",
+	])
+
+	return "\n".join(lines)
+
+
 def build_categorical_encoding_report(summary: Dict[str, object], encoded_df: pd.DataFrame) -> str:
 	"""Create a markdown report for Step 3 categorical handling and encoding."""
 
@@ -630,6 +816,30 @@ def main() -> None:
 	for plot_path in plot_paths:
 		print(plot_path)
 	print(f"\nStep 4 report saved to: {STEP4_REPORT_PATH}")
+
+	removal_columns = select_outlier_removal_columns(encoded_df)
+	filtered_df, removal_summary = remove_outliers_iqr(encoded_df, removal_columns)
+	removal_plot_paths = create_outlier_removal_plots(encoded_df, filtered_df, removal_columns)
+	STEP5_CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+	filtered_df.to_csv(STEP5_CHECKPOINT_PATH, index=False)
+
+	step5_report = build_outlier_removal_report(removal_summary, filtered_df, removal_plot_paths)
+	STEP5_REPORT_PATH.write_text(step5_report, encoding="utf-8")
+
+	print("\nStep 5: Outlier Removal")
+	print("Removal Columns:")
+	print(removal_columns)
+	print(f"Dataset size before removal: {removal_summary['before_shape']}")
+	print(f"Dataset size after removal: {removal_summary['after_shape']}")
+	print(f"Rows removed: {removal_summary['rows_removed']}")
+	print(f"Percentage removed: {removal_summary['percentage_removed']}%")
+	print("\nFeature-wise outlier counts used for removal:")
+	print(removal_summary["feature_outlier_counts"])
+	print("\nSaved removal plots:")
+	for plot_path in removal_plot_paths:
+		print(plot_path)
+	print(f"\nStep 5 checkpoint saved to: {STEP5_CHECKPOINT_PATH}")
+	print(f"Step 5 report saved to: {STEP5_REPORT_PATH}")
 
 
 if __name__ == "__main__":

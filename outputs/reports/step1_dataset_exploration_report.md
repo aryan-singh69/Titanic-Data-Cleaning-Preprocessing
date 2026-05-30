@@ -14,15 +14,15 @@ PassengerId, Survived, Pclass, Name, Sex, Age, SibSp, Parch, Ticket, Fare, Cabin
 - PassengerId: int64
 - Survived: int64
 - Pclass: int64
-- Name: str
-- Sex: str
+- Name: object
+- Sex: object
 - Age: float64
 - SibSp: int64
 - Parch: int64
-- Ticket: str
+- Ticket: object
 - Fare: float64
-- Cabin: str
-- Embarked: str
+- Cabin: object
+- Embarked: object
 
 ## Missing Values
 ```text
@@ -66,19 +66,19 @@ Name, Sex, Ticket, Cabin, Embarked
 
 ## Statistical Summary
 ```text
-             count unique                      top freq       mean         std   min     25%      50%    75%       max
-PassengerId  891.0    NaN                      NaN  NaN      446.0  257.353842   1.0   223.5    446.0  668.5     891.0
-Survived     891.0    NaN                      NaN  NaN   0.383838    0.486592   0.0     0.0      0.0    1.0       1.0
-Pclass       891.0    NaN                      NaN  NaN   2.308642    0.836071   1.0     2.0      3.0    3.0       3.0
-Name           891    891  Braund, Mr. Owen Harris    1        NaN         NaN   NaN     NaN      NaN    NaN       NaN
-Sex            891      2                     male  577        NaN         NaN   NaN     NaN      NaN    NaN       NaN
-Age          714.0    NaN                      NaN  NaN  29.699118   14.526497  0.42  20.125     28.0   38.0      80.0
-SibSp        891.0    NaN                      NaN  NaN   0.523008    1.102743   0.0     0.0      0.0    1.0       8.0
-Parch        891.0    NaN                      NaN  NaN   0.381594    0.806057   0.0     0.0      0.0    0.0       6.0
-Ticket         891    681                   347082    7        NaN         NaN   NaN     NaN      NaN    NaN       NaN
-Fare         891.0    NaN                      NaN  NaN  32.204208   49.693429   0.0  7.9104  14.4542   31.0  512.3292
-Cabin          204    147                       G6    4        NaN         NaN   NaN     NaN      NaN    NaN       NaN
-Embarked       889      3                        S  644        NaN         NaN   NaN     NaN      NaN    NaN       NaN
+             count unique                  top freq       mean         std   min     25%      50%    75%       max
+PassengerId  891.0    NaN                  NaN  NaN      446.0  257.353842   1.0   223.5    446.0  668.5     891.0
+Survived     891.0    NaN                  NaN  NaN   0.383838    0.486592   0.0     0.0      0.0    1.0       1.0
+Pclass       891.0    NaN                  NaN  NaN   2.308642    0.836071   1.0     2.0      3.0    3.0       3.0
+Name           891    891  Dooley, Mr. Patrick    1        NaN         NaN   NaN     NaN      NaN    NaN       NaN
+Sex            891      2                 male  577        NaN         NaN   NaN     NaN      NaN    NaN       NaN
+Age          714.0    NaN                  NaN  NaN  29.699118   14.526497  0.42  20.125     28.0   38.0      80.0
+SibSp        891.0    NaN                  NaN  NaN   0.523008    1.102743   0.0     0.0      0.0    1.0       8.0
+Parch        891.0    NaN                  NaN  NaN   0.381594    0.806057   0.0     0.0      0.0    0.0       6.0
+Ticket         891    681               347082    7        NaN         NaN   NaN     NaN      NaN    NaN       NaN
+Fare         891.0    NaN                  NaN  NaN  32.204208   49.693429   0.0  7.9104  14.4542   31.0  512.3292
+Cabin          204    147                   G6    4        NaN         NaN   NaN     NaN      NaN    NaN       NaN
+Embarked       889      3                    S  644        NaN         NaN   NaN     NaN      NaN    NaN       NaN
 ```
 
 ## Notes
